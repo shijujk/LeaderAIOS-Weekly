@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Clock,
@@ -13,196 +13,147 @@ import {
   Moon,
   ShieldCheck,
   ChevronRight,
-  Search,
+  Search
 } from "lucide-react";
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
+/** WEEKLY MODEL (Horizontal Bar) */
+const WEEK = [
+  { id: "mon", label: "Mon", theme: "Orient & Plan" },
+  { id: "tue", label: "Tue", theme: "Execute & Decide" },
+  { id: "wed", label: "Wed", theme: "Review & Align" },
+  { id: "thu", label: "Thu", theme: "Deepwork: Be a Builder", slot: "Thu AM • 2h Deepwork" },
+  { id: "fri", label: "Fri", theme: "Inspect & Learn" }
+];
+
+/** DAILY MODEL (Vertical Blocks) */
 const BLOCKS = [
   {
     id: "orient",
-    title: "Morning Insight Intake & Triage",
+    title: "Morning Triage",
     time: "10:00–10:30",
-    intent: "See clearly before acting",
+    intent: "Orient",
     icon: Sparkles,
-    colorHint: "from-slate-50 to-slate-100",
     ai: [
-      "Pull signals from calendar, mail/chat, dashboards, incidents, OKRs",
+      "Aggregate signals from calendar, messages, dashboards, incidents, OKRs",
       "Cluster into Urgent & Important / Important-Not-Urgent / Noise",
-      "Draft 3 outcomes for the day + suggested deprioritization",
+      "Draft Today’s 3 Outcomes (suggested)"
     ],
     human: [
       "Confirm/edit Today’s 3 Outcomes",
-      "Select the top 3 Urgent & Important items",
-      "Explicitly mark what will NOT be done today",
+      "Select top 3 Urgent & Important items",
+      "Mark what will NOT be done today"
     ],
-    outputs: [
-      "Today’s 3 Outcomes",
-      "Top 3 U&I items",
-      "Deprioritized list (parked)",
-    ],
-    artifacts: [
-      "Outcome Log (today)",
-      "Priority Queue",
-    ],
+    outputs: ["Today’s 3 Outcomes", "Top 3 U&I items", "Parked list (deprioritized)"],
+    artifacts: ["Outcome Log", "Priority Queue"]
   },
   {
     id: "resolve",
     title: "Resolve Urgent & Important",
     time: "10:30–11:30",
-    intent: "Remove pressure points early",
+    intent: "Decide",
     icon: AlertTriangle,
-    colorHint: "from-amber-50 to-amber-100",
     ai: [
-      "Generate decision briefs (options, tradeoffs, risks, reversible/irreversible)",
-      "Draft stakeholder messages and escalation notes",
-      "Convert blockers into actions with owners + deadlines",
+      "Generate decision briefs (options, tradeoffs, risks, reversible vs irreversible)",
+      "Draft stakeholder messages & escalation notes",
+      "Convert blockers into actions with owners + deadlines"
     ],
     human: [
-      "Make decisions or delegate with clear owner/time",
+      "Make decisions OR delegate with clear owner + time",
       "Send 1–3 crisp messages (ask, context, deadline)",
-      "Lock next steps in the Decision/Commitment log",
+      "Log decisions and commitments"
     ],
-    outputs: [
-      "Decisions made OR assigned",
-      "Blockers cleared / escalations sent",
-      "Owner + deadline for every action",
-    ],
-    artifacts: [
-      "Decision Log",
-      "Commitment Log",
-    ],
+    outputs: ["Decisions made or owned", "Blockers cleared / escalations sent", "Owners + deadlines set"],
+    artifacts: ["Decision Log", "Commitment Log"]
   },
   {
     id: "meetings1",
     title: "Meeting Block 1",
     time: "11:30–13:00",
-    intent: "High-quality meetings, low waste",
+    intent: "Align",
     icon: Calendar,
-    colorHint: "from-indigo-50 to-indigo-100",
     ai: [
-      "Auto-generate meeting brief: purpose, agenda, decisions expected",
+      "Auto-generate meeting brief (purpose, agenda, decisions expected)",
       "Summarize relevant metrics/threads",
-      "Capture notes → decisions, actions, risks",
+      "Capture notes → decisions, actions, risks"
     ],
     human: [
       "Start with intent: what decision/outcome is needed",
-      "Keep meeting to decision + action closure",
-      "End by confirming owners and dates",
+      "Drive to decisions + actions (not updates)",
+      "Confirm owners and dates"
     ],
-    outputs: [
-      "Meeting outcomes (decisions/actions/risks)",
-      "Aligned stakeholders",
-    ],
-    artifacts: [
-      "Meeting Briefs",
-      "Action Register",
-    ],
+    outputs: ["Decisions logged", "Actions captured", "Stakeholders aligned"],
+    artifacts: ["Meeting Briefs", "Action Register"]
   },
   {
     id: "meetings2",
     title: "Meeting Block 2",
     time: "14:00–16:00",
-    intent: "Execution-focused alignment",
+    intent: "Execute",
     icon: Layers,
-    colorHint: "from-sky-50 to-sky-100",
     ai: [
       "Detect dependency conflicts & slippage signals",
-      "Suggest agenda cuts (what to defer) and key questions",
-      "Draft follow-ups for owners",
+      "Suggest key questions and agenda cuts",
+      "Draft follow-ups for owners"
     ],
     human: [
       "Bias toward unblock/decide rather than status",
-      "Confirm dependency owners + next checkpoint",
-      "Kill low-value meetings",
+      "Resolve conflicts and dependencies",
+      "Kill low-value discussions"
     ],
-    outputs: [
-      "Dependencies unblocked",
-      "Course corrections agreed",
-    ],
-    artifacts: [
-      "Dependency Map (lightweight)",
-      "Risk Register",
-    ],
+    outputs: ["Dependencies unblocked", "Course corrections agreed", "Execution momentum"],
+    artifacts: ["Dependency Map (lightweight)", "Risk Register"]
   },
   {
     id: "future",
-    title: "Important, Not Urgent (Build the Future)",
+    title: "Important, Not Urgent",
     time: "16:00–17:00",
-    intent: "Protect strategic work",
+    intent: "Build",
     icon: Target,
-    colorHint: "from-emerald-50 to-emerald-100",
     ai: [
-      "Act as thought partner: synthesize, challenge, propose structure",
-      "Generate first drafts (strategy note, narrative, framework)",
-      "Summarize prior context to reduce re-loading",
+      "Recap context to reduce re-loading",
+      "Act as thought partner (synthesize, challenge, structure)",
+      "Generate first drafts (strategy note, framework, narrative)"
     ],
     human: [
+      "Focus on one strategic theme",
       "Produce one tangible artifact",
-      "Make one strategic call or alignment note",
-      "Optional: 1 coaching/talent touch",
+      "Optional: one talent/coaching touch"
     ],
-    outputs: [
-      "One artifact (doc/note/plan)",
-      "Strategic clarity increment",
-    ],
-    artifacts: [
-      "Strategy Notes",
-      "Architecture/Program Artifacts",
-    ],
+    outputs: ["One artifact produced", "Strategic clarity increment", "Future work protected"],
+    artifacts: ["Strategy Notes", "Architecture/Program Artifacts"]
   },
   {
     id: "inspect",
-    title: "Checkpoint (Inspect & Adjust)",
+    title: "Checkpoint",
     time: "17:00–18:00",
-    intent: "Course-correct before the day ends",
+    intent: "Inspect",
     icon: ShieldCheck,
-    colorHint: "from-violet-50 to-violet-100",
     ai: [
-      "Compare plan vs reality (outcomes, commitments, signals)",
+      "Compare intent vs reality (outcomes, commitments, signals)",
       "Flag new risks/quality signals",
-      "Suggest minimal interventions",
+      "Suggest minimal interventions"
     ],
-    human: [
-      "Decide: intervene / defer / escalate",
-      "Update commitments",
-      "Protect tomorrow’s plan",
-    ],
-    outputs: [
-      "1–2 course corrections",
-      "Updated risk/commitment view",
-    ],
-    artifacts: [
-      "Daily Summary",
-      "Updated Commitment Log",
-    ],
+    human: ["Decide: intervene / defer / escalate", "Update commitments", "Protect tomorrow’s plan"],
+    outputs: ["1–2 course corrections", "Updated risk/commitment view", "Fewer surprises tomorrow"],
+    artifacts: ["Daily Summary", "Updated Commitment Log"]
   },
   {
     id: "close",
-    title: "Night Closure (Prep Tomorrow)",
+    title: "Night Closure",
     time: "30 min (night)",
-    intent: "End calm, start clear",
+    intent: "Close",
     icon: Moon,
-    colorHint: "from-zinc-50 to-zinc-100",
     ai: [
-      "Draft tomorrow’s top 3 outcomes",
+      "Draft tomorrow’s top outcomes",
       "Prepare briefs for tomorrow’s meetings",
-      "Summarize decisions pending and open loops",
+      "Summarize decisions pending and open loops"
     ],
-    human: [
-      "Capture 2 learnings (max)",
-      "Confirm tomorrow’s first action",
-      "Shutdown mentally",
-    ],
-    outputs: [
-      "Tomorrow draft plan",
-      "Learning captured",
-    ],
-    artifacts: [
-      "Learning Log",
-      "Tomorrow Brief Pack",
-    ],
-  },
+    human: ["Capture 1–2 learnings", "Confirm tomorrow’s first action", "Shutdown mentally"],
+    outputs: ["Tomorrow draft plan", "Learning captured", "Calm closure"],
+    artifacts: ["Learning Log", "Tomorrow Brief Pack"]
+  }
 ];
 
 function Pill({ children, tone = "neutral" }) {
@@ -210,13 +161,15 @@ function Pill({ children, tone = "neutral" }) {
     neutral: "bg-slate-100 text-slate-700 border-slate-200",
     ai: "bg-slate-900 text-white border-slate-900",
     human: "bg-white text-slate-800 border-slate-200",
-    out: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    out: "bg-emerald-50 text-emerald-800 border-emerald-200"
   };
   return (
-    <span className={cn(
-      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-      tones[tone] || tones.neutral
-    )}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+        tones[tone] || tones.neutral
+      )}
+    >
       {children}
     </span>
   );
@@ -233,14 +186,16 @@ function SectionCard({ title, icon: Icon, tone = "neutral", children }) {
   return (
     <div className={cn("rounded-2xl border p-4 shadow-sm", toneClass)}>
       <div className="flex items-center gap-2">
-        <div className={cn(
-          "grid h-9 w-9 place-items-center rounded-xl",
-          tone === "ai"
-            ? "bg-slate-900 text-white"
-            : tone === "out"
-              ? "bg-emerald-600 text-white"
-              : "bg-slate-100 text-slate-700"
-        )}>
+        <div
+          className={cn(
+            "grid h-9 w-9 place-items-center rounded-xl",
+            tone === "ai"
+              ? "bg-slate-900 text-white"
+              : tone === "out"
+                ? "bg-emerald-600 text-white"
+                : "bg-slate-100 text-slate-700"
+          )}
+        >
           <Icon className="h-5 w-5" />
         </div>
         <div className="text-sm font-semibold text-slate-900">{title}</div>
@@ -257,36 +212,26 @@ function BlockTile({ block, active, onClick }) {
       onClick={onClick}
       className={cn(
         "group w-full text-left rounded-2xl border p-4 shadow-sm transition",
-        active
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-slate-200 bg-white hover:border-slate-300"
+        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white hover:border-slate-300"
       )}
       aria-pressed={active}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              "grid h-10 w-10 place-items-center rounded-xl",
-              active ? "bg-white/10" : "bg-slate-100"
-            )}
-          >
+          <div className={cn("grid h-10 w-10 place-items-center rounded-xl", active ? "bg-white/10" : "bg-slate-100")}>
             <Icon className={cn("h-5 w-5", active ? "text-white" : "text-slate-700")} />
           </div>
           <div>
-            <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>
-              {block.title}
-            </div>
+            <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>{block.title}</div>
             <div className={cn("mt-1 flex items-center gap-2 text-xs", active ? "text-white/80" : "text-slate-500")}>
               <Clock className="h-3.5 w-3.5" />
               <span>{block.time}</span>
+              <span className="mx-1">•</span>
+              <span>{block.intent}</span>
             </div>
           </div>
         </div>
         <ChevronRight className={cn("h-5 w-5 transition", active ? "text-white" : "text-slate-300 group-hover:text-slate-400")} />
-      </div>
-      <div className={cn("mt-3 text-xs leading-relaxed", active ? "text-white/80" : "text-slate-600")}>
-        {block.intent}
       </div>
     </button>
   );
@@ -306,51 +251,77 @@ function List({ items }) {
 }
 
 export default function LeaderDayOSInteractive() {
+  const [selectedDay, setSelectedDay] = useState("thu"); // default highlight
   const [activeId, setActiveId] = useState(BLOCKS[0].id);
   const [query, setQuery] = useState("");
 
+  // Optional: Thursday “Builder Mode” label tweak (no schedule changes)
+  const blocksBaseForDay = useMemo(() => {
+    if (selectedDay !== "thu") return BLOCKS;
+    return BLOCKS.map((b) =>
+      b.id === "future" ? { ...b, title: "Deepwork — Builder Mode" } : b
+    );
+  }, [selectedDay]);
+
+  // Search filters the *current* day’s blocks
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return BLOCKS;
-    return BLOCKS.filter((b) => {
-      const hay = [b.title, b.time, b.intent, ...b.ai, ...b.human, ...b.outputs, ...(b.artifacts || [])]
+    if (!q) return blocksBaseForDay;
+
+    return blocksBaseForDay.filter((b) => {
+      const hay = [
+        b.title,
+        b.time,
+        b.intent,
+        ...b.ai,
+        ...b.human,
+        ...b.outputs,
+        ...(b.artifacts || [])
+      ]
         .join(" ")
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [query]);
+  }, [query, blocksBaseForDay]);
 
-  const active = useMemo(
-    () => (filtered.find((b) => b.id === activeId) || filtered[0] || BLOCKS[0]),
-    [activeId, filtered]
-  );
+  const active = useMemo(() => {
+    return filtered.find((b) => b.id === activeId) || filtered[0] || blocksBaseForDay[0];
+  }, [activeId, filtered, blocksBaseForDay]);
 
-  // If filtering removes the active block, fall back.
-  React.useEffect(() => {
+  // If filtering removes the active block, fall back
+  useEffect(() => {
     if (!filtered.some((b) => b.id === activeId) && filtered.length) {
       setActiveId(filtered[0].id);
     }
   }, [filtered, activeId]);
 
+  // When switching day, reset to first block (clean UX)
+  useEffect(() => {
+    setActiveId(blocksBaseForDay[0].id);
+  }, [selectedDay, blocksBaseForDay]);
+
+  const selectedTheme = WEEK.find((x) => x.id === selectedDay);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-6xl px-4 py-8">
+        {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Option 3 • Leader Day OS (Interactive)
+              Weekly → Daily • Leader AI OS
             </div>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              A leader’s day, broken into usable blocks
+              Weekly themes. Daily execution blocks.
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
-              Click a block to reveal what <span className="font-medium text-slate-900">AI does</span>, what the
-              <span className="font-medium text-slate-900"> leader does</span>, and the
-              <span className="font-medium text-slate-900"> outputs</span> that make the day auditable and calm.
+              Pick a day to set context. Then click a block to see what <span className="font-medium text-slate-900">AI prepares</span>,
+              what the <span className="font-medium text-slate-900">leader decides</span>, and the <span className="font-medium text-slate-900">outputs</span>.
             </p>
           </div>
 
+          {/* Search */}
           <div className="w-full md:w-[360px]">
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <Search className="h-4 w-4 text-slate-400" />
@@ -363,10 +334,10 @@ export default function LeaderDayOSInteractive() {
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               <Pill tone="ai">
-                <Sparkles className="h-3.5 w-3.5" /> AI actions
+                <Sparkles className="h-3.5 w-3.5" /> AI
               </Pill>
               <Pill tone="human">
-                <User className="h-3.5 w-3.5" /> Human actions
+                <User className="h-3.5 w-3.5" /> Human
               </Pill>
               <Pill tone="out">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Outputs
@@ -375,8 +346,48 @@ export default function LeaderDayOSInteractive() {
           </div>
         </div>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-12">
+        {/* Weekly Horizontal Bar */}
+        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            {WEEK.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setSelectedDay(d.id)}
+                className={cn(
+                  "rounded-2xl border px-4 py-3 text-left transition",
+                  selectedDay === d.id
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                )}
+              >
+                <div className="text-xs opacity-80">{d.label}</div>
+                <div className="text-sm font-semibold">{d.theme}</div>
+                {d.slot && <div className="mt-1 text-xs opacity-80">{d.slot}</div>}
+              </button>
+            ))}
+
+            <div className="ml-auto hidden md:block text-sm text-slate-600">
+              <span className="font-medium text-slate-900">Selected:</span>{" "}
+              {selectedTheme?.theme}
+            </div>
+          </div>
+        </div>
+
+        {/* Daily View */}
+        <div className="mt-6 grid gap-6 md:grid-cols-12">
+          {/* Left: Blocks */}
           <div className="md:col-span-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-900">
+                Daily Blocks
+                {selectedTheme?.theme ? (
+                  <span className="ml-2 text-xs font-medium text-slate-500">
+                    • {selectedTheme.theme}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
             <div className="space-y-3">
               {filtered.map((b) => (
                 <BlockTile
@@ -394,6 +405,7 @@ export default function LeaderDayOSInteractive() {
             </div>
           </div>
 
+          {/* Right: Details */}
           <div className="md:col-span-7">
             <AnimatePresence mode="wait">
               <motion.div
@@ -406,10 +418,8 @@ export default function LeaderDayOSInteractive() {
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-lg font-semibold text-slate-900">{active.title}</div>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                    <div className="text-lg font-semibold text-slate-900">{active.title}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <Pill>
                         <Clock className="h-3.5 w-3.5" /> {active.time}
                       </Pill>
@@ -421,13 +431,13 @@ export default function LeaderDayOSInteractive() {
                 </div>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <SectionCard title="AI actions" icon={Sparkles} tone="ai">
+                  <SectionCard title="AI prepares" icon={Sparkles} tone="ai">
                     <List items={active.ai} />
                   </SectionCard>
-                  <SectionCard title="Human actions" icon={User}>
+                  <SectionCard title="Leader decides" icon={User}>
                     <List items={active.human} />
                   </SectionCard>
-                  <SectionCard title="Outcomes" icon={CheckCircle2} tone="out">
+                  <SectionCard title="Outputs" icon={CheckCircle2} tone="out">
                     <List items={active.outputs} />
                   </SectionCard>
                 </div>
@@ -435,9 +445,9 @@ export default function LeaderDayOSInteractive() {
                 <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold text-slate-900">Artifacts produced</div>
+                      <div className="text-sm font-semibold text-slate-900">Artifacts</div>
                       <div className="mt-1 text-sm text-slate-600">
-                        These are the lightweight logs that make leadership work traceable.
+                        Lightweight logs that make leadership work traceable.
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -447,53 +457,13 @@ export default function LeaderDayOSInteractive() {
                     </div>
                   </div>
                 </div>
-
-                <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="text-sm font-semibold text-slate-900">Recommended default</div>
-                    <div className="mt-2 text-sm text-slate-700 leading-relaxed">
-                      <span className="font-medium">AI-first:</span> start each block by reviewing the AI brief,
-                      then make human edits. Never start from blank.
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="text-sm font-semibold text-slate-900">Anti-pattern to avoid</div>
-                    <div className="mt-2 text-sm text-slate-700 leading-relaxed">
-                      Using AI only for writing. The leverage is in
-                      <span className="font-medium"> triage, decision framing, meeting closure</span>, and
-                      <span className="font-medium"> inspection</span>.
-                    </div>
-                  </div>
-                </div>
               </motion.div>
             </AnimatePresence>
           </div>
         </div>
 
-        <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">How leaders adopt this</div>
-              <div className="mt-1 text-sm text-slate-600">
-                Progressive disclosure: Week 1 only morning + night. Add blocks weekly.
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Pill>
-                <Sparkles className="h-3.5 w-3.5" /> AI before humans
-              </Pill>
-              <Pill>
-                <CheckCircle2 className="h-3.5 w-3.5" /> Every block ends with an output
-              </Pill>
-              <Pill>
-                <User className="h-3.5 w-3.5" /> Interaction = confirm/edit
-              </Pill>
-            </div>
-          </div>
-        </div>
-
         <div className="mt-6 text-center text-xs text-slate-500">
-          Tip: This component is tool-agnostic. Wire the “AI actions” list to your real systems later.
+          Weekly sets context. Daily blocks execute. Deepwork builds the future.
         </div>
       </div>
     </div>
