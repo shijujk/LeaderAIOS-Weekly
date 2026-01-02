@@ -73,9 +73,9 @@ const BASE_BLOCKS = [
   /** Meeting Block 1: People/Team/Hiring/Quick Decisions */
   {
     id: "meetings1",
-    title: "Meeting Block 1",
+    title: "People and Leadership Meetings",
     time: "11:30–13:00",
-    intent: "People & Decisions",
+    intent: "Lead with purpose",
     icon: Calendar,
     meetingTypes: ["1:1s / Coaching", "Team Rituals", "Hiring / Talent", "Decision (quick)"],
     meetingPlaybooks: {
