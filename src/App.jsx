@@ -68,25 +68,73 @@ const BASE_BLOCKS = [
     outputs: ["Decisions made or owned", "Blockers cleared / escalations sent", "Owners + deadlines set"],
     artifacts: ["Decision Log", "Commitment Log"]
   },
+
+  /** Meeting Block 1: People/Team/Hiring/Quick Decisions */
   {
     id: "meetings1",
     title: "Meeting Block 1",
     time: "11:30–13:00",
-    intent: "Align",
+    intent: "People & Decisions",
     icon: Calendar,
-    ai: [
-      "Auto-generate meeting briefs (purpose, agenda, decisions expected)",
-      "Summarize relevant metrics/threads",
-      "Capture notes → decisions, actions, risks"
-    ],
-    human: [
-      "Start with intent: what decision/outcome is needed",
-      "Drive to decisions + actions (not updates)",
-      "Confirm owners and dates"
-    ],
-    outputs: ["Decisions logged", "Actions captured", "Stakeholders aligned"],
-    artifacts: ["Meeting Briefs", "Action Register"]
+    meetingTypes: ["1:1s / Coaching", "Team Rituals", "Hiring / Talent", "Decision (quick)"],
+    meetingPlaybooks: {
+      "1:1s / Coaching": {
+        ai: [
+          "Recap last commitments + progress",
+          "Surface themes: motivation, blockers, growth opportunities",
+          "Suggest 3 coaching questions + feedback framing"
+        ],
+        human: [
+          "Listen first (signal > solutions)",
+          "Remove one blocker OR agree a next step",
+          "Agree 1 growth action + 1 commitment"
+        ],
+        outputs: ["Commitments updated", "One growth action", "Sentiment / risk signal captured"]
+      },
+      "Team Rituals": {
+        ai: [
+          "Prepare a crisp agenda (wins, risks, priorities)",
+          "Summarize key updates (only deltas)",
+          "Draft recognition call-outs (if any)"
+        ],
+        human: [
+          "Reinforce outcomes for the week",
+          "Spot conflicts early and resolve",
+          "Close with owners + deadlines"
+        ],
+        outputs: ["Team aligned", "Risks made explicit", "Clear actions + owners"]
+      },
+      "Hiring / Talent": {
+        ai: [
+          "Summarize interview feedback and signals",
+          "Highlight risk areas / missing evidence",
+          "Draft role-fit summary vs rubric"
+        ],
+        human: [
+          "Make hire/no-hire decisions quickly",
+          "Assign next steps (offer, follow-ups, pipeline)",
+          "Calibrate bar and role expectations"
+        ],
+        outputs: ["Hire decision + rationale", "Next steps owned", "Bar clarity improved"]
+      },
+      "Decision (quick)": {
+        ai: [
+          "One-page decision brief: options + tradeoffs",
+          "Identify what must be true / risks",
+          "Draft a crisp stakeholder message"
+        ],
+        human: [
+          "Decide or delegate with owner + time",
+          "Time-box discussion to avoid drift",
+          "Log decision and communicate"
+        ],
+        outputs: ["Decision logged", "Owner + due date", "Stakeholders updated"]
+      }
+    },
+    artifacts: ["1:1 Notes", "Talent Decisions", "Team Actions"]
   },
+
+  /** Meeting Block 2: Execution meetings with Planning/Review/Escalation */
   {
     id: "meetings2",
     title: "Execution Meetings",
@@ -134,8 +182,10 @@ const BASE_BLOCKS = [
         ],
         outputs: ["Decision + owner", "Committed actions", "Escalation resolved or time-boxed"]
       }
-    }
+    },
+    artifacts: ["Program Plan", "Risk Register", "Dependency Notes"]
   },
+
   {
     id: "strategic",
     title: "Strategic Work (Important, Not Urgent)",
@@ -149,11 +199,11 @@ const BASE_BLOCKS = [
     ],
     human: [
       "Focus on one strategic theme",
-      "Produce one tangible artifact (note, decision framing, framework)",
+      "Produce one tangible artifact (note, framing, plan)",
       "Optional: one high-leverage people action"
     ],
     outputs: ["One strategic artifact", "Clarity increment", "Future work protected"],
-    artifacts: ["Strategy Notes", "Architecture/Program Artifacts"]
+    artifacts: ["Strategy Notes", "Key Narrative"]
   },
   {
     id: "parking",
@@ -239,7 +289,6 @@ function applyThursdayOverrides(blocks) {
   // Remove Meeting Block 1 on Thursday
   const base = blocks.filter((b) => b.id !== "meetings1");
 
-  // Override times + insert deepwork + swap 16:00 slot to urgent carry-over
   return base
     .map((b) => {
       if (b.id === "orient") return { ...b, time: "10:00–10:30" };
@@ -252,16 +301,8 @@ function applyThursdayOverrides(blocks) {
           time: "16:00–17:00",
           intent: "Resolve",
           icon: AlertTriangle,
-          ai: [
-            "Summarize what landed unplanned today",
-            "Suggest fast triage: handle vs park",
-            "Draft stakeholder updates"
-          ],
-          human: [
-            "Handle critical escalations",
-            "Delegate with owners + deadlines",
-            "Close loops created by meetings"
-          ],
+          ai: ["Summarize what landed unplanned today", "Suggest fast triage: handle vs park", "Draft stakeholder updates"],
+          human: ["Handle critical escalations", "Delegate with owners + deadlines", "Close loops created by meetings"],
           outputs: ["Urgent items contained", "Escalations resolved", "Clear follow-ups"],
           artifacts: ["Urgent Queue", "Commitment Log"]
         };
@@ -270,7 +311,6 @@ function applyThursdayOverrides(blocks) {
     })
     .reduce((acc, b) => {
       acc.push(b);
-      // Insert deepwork after resolve block
       if (b.id === "resolve") {
         acc.push({
           id: "deepwork",
@@ -278,16 +318,8 @@ function applyThursdayOverrides(blocks) {
           time: "11:00–13:30",
           intent: "Build",
           icon: Target,
-          ai: [
-            "Act as thought partner (structure, synthesis, challenge)",
-            "Generate first drafts (doc, framework, analysis, narrative)",
-            "Offer alternatives and risks to strengthen thinking"
-          ],
-          human: [
-            "Work on one meaningful artifact (strategy, design, prototype, narrative)",
-            "Time-box decisions and avoid context switching",
-            "Finish with a shareable output"
-          ],
+          ai: ["Act as thought partner (structure, synthesis, challenge)", "Generate first drafts (doc, framework, analysis, narrative)"],
+          human: ["Work on one meaningful artifact", "Avoid context switching", "Finish with a shareable output"],
           outputs: ["One tangible artifact", "Clarity + decision quality improvement"],
           artifacts: ["Deepwork Artifact", "Notes / Drafts"]
         });
@@ -408,13 +440,12 @@ function List({ items }) {
 }
 
 export default function LeaderDayOSInteractive() {
-  // Auto-select today (IST)
   const [selectedDay, setSelectedDay] = useState(() => getWeekdayId(new Date(), TIMEZONE));
   const [activeId, setActiveId] = useState(BASE_BLOCKS[0].id);
   const [query, setQuery] = useState("");
-  const [meetingType, setMeetingType] = useState("Planning");
+  const [meetingType, setMeetingType] = useState("");
 
-  // Tick once per minute (for NOW/NEXT highlighting)
+  // Tick once per minute
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60 * 1000);
@@ -427,11 +458,9 @@ export default function LeaderDayOSInteractive() {
   }, [now]);
 
   const blocksBaseForDay = useMemo(() => {
-    const dayBlocks = selectedDay === "thu" ? applyThursdayOverrides(BASE_BLOCKS) : BASE_BLOCKS;
-    return dayBlocks;
+    return selectedDay === "thu" ? applyThursdayOverrides(BASE_BLOCKS) : BASE_BLOCKS;
   }, [selectedDay]);
 
-  // Search filters the *current* day’s blocks
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return blocksBaseForDay;
@@ -464,40 +493,50 @@ export default function LeaderDayOSInteractive() {
     return filtered.find((b) => b.id === activeId) || filtered[0] || blocksBaseForDay[0];
   }, [activeId, filtered, blocksBaseForDay]);
 
-  // If filtering removes the active block, fall back
+  // If filtering removes active block, fall back
   useEffect(() => {
     if (!filtered.some((b) => b.id === activeId) && filtered.length) {
       setActiveId(filtered[0].id);
     }
   }, [filtered, activeId]);
 
-  // Reset to first block when switching day (clean UX)
+  // Reset on day change
   useEffect(() => {
     setActiveId(blocksBaseForDay[0].id);
-    setMeetingType("Planning");
   }, [selectedDay, blocksBaseForDay]);
 
-  // Auto-highlight current or next block (based on IST time) — but only when NOT searching
+  // Auto-pick a valid meeting type for the active block
+  useEffect(() => {
+    if (!active?.meetingTypes?.length) {
+      setMeetingType("");
+      return;
+    }
+    if (!meetingType || !active.meetingTypes.includes(meetingType)) {
+      setMeetingType(active.meetingTypes[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, active?.meetingTypes]);
+
+  // Auto highlight NOW/NEXT (when not searching)
   const focus = useMemo(() => {
     const nowMin = minutesInTz(now, TIMEZONE);
     return pickCurrentOrNextBlock(blocksBaseForDay, nowMin);
   }, [now, blocksBaseForDay]);
 
   useEffect(() => {
-    if (query.trim()) return; // don't fight the user while searching
+    if (query.trim()) return;
     if (focus?.id) setActiveId(focus.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.id, selectedDay, query]);
 
   const selectedTheme = WEEK.find((x) => x.id === selectedDay);
 
-  // Meeting details (chips)
-  const meetingBlock = active?.meetingTypes ? active : null;
-  const meetingPb = meetingBlock?.meetingPlaybooks?.[meetingType];
+  const isMeeting = !!active?.meetingTypes?.length;
+  const pb = isMeeting ? active.meetingPlaybooks?.[meetingType] : null;
 
-  const aiItems = meetingPb?.ai || active.ai || [];
-  const humanItems = meetingPb?.human || active.human || [];
-  const outItems = meetingPb?.outputs || active.outputs || [];
+  const aiItems = pb?.ai || active.ai || [];
+  const humanItems = pb?.human || active.human || [];
+  const outItems = pb?.outputs || active.outputs || [];
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -573,7 +612,7 @@ export default function LeaderDayOSInteractive() {
 
         {/* Daily View */}
         <div className="mt-6 grid gap-6 md:grid-cols-12">
-          {/* Left: Blocks */}
+          {/* Left */}
           <div className="md:col-span-5">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-900">
@@ -618,7 +657,7 @@ export default function LeaderDayOSInteractive() {
             </div>
           </div>
 
-          {/* Right: Details */}
+          {/* Right */}
           <div className="md:col-span-7">
             <AnimatePresence mode="wait">
               <motion.div
@@ -649,10 +688,10 @@ export default function LeaderDayOSInteractive() {
                       </Pill>
                     </div>
 
-                    {/* Meeting type chips (only for Execution Meetings) */}
-                    {meetingBlock ? (
+                    {/* Meeting chips */}
+                    {isMeeting ? (
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {meetingBlock.meetingTypes.map((t) => (
+                        {active.meetingTypes.map((t) => (
                           <button
                             key={t}
                             onClick={() => setMeetingType(t)}
