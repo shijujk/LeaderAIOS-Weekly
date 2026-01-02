@@ -8,27 +8,32 @@ import {
   AlertTriangle,
   ClipboardList,
   Calendar,
-  Target,
   Layers,
   Moon,
   ShieldCheck,
   ChevronRight,
-  Search
+  Search,
+  Globe
 } from "lucide-react";
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
+
+// Auto-detect timezone (global)
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
+// Core hours end (used for NOW/NEXT logic so optional night blocks don't show as NEXT during the day)
+const CORE_END_MIN = 17 * 60;
 
 /** WEEKLY MODEL (Horizontal Bar) */
 const WEEK = [
   { id: "mon", label: "Mon", theme: "Orient & Plan" },
   { id: "tue", label: "Tue", theme: "Decide & Execute" },
-  { id: "wed", label: "Wed", theme: "Decide & Execute" },
+  { id: "wed", label: "Wed", theme: "Review & Align" },
   { id: "thu", label: "Thu", theme: "Deepwork: Be a Builder" },
   { id: "fri", label: "Fri", theme: "Inspect & Learn" }
 ];
 
-/** BASE DAILY MODEL (non-Thursday) */
+/** BASE (non-Thursday) DAILY MODEL */
 const BASE_BLOCKS = [
   {
     id: "orient",
@@ -43,10 +48,10 @@ const BASE_BLOCKS = [
     ],
     human: [
       "Confirm/edit Today’s 3 Outcomes",
-      "Select top 3 Urgent & Important items",
-      "Mark what will NOT be done today"
+      "Select top Urgent & Important items",
+      "Explicitly mark what will NOT be done today"
     ],
-    outputs: ["Today’s 3 Outcomes", "Top 3 U&I items", "Parked list (deprioritized)"],
+    outputs: ["Today’s 3 Outcomes", "Top priorities", "Parked list (deprioritized)"],
     artifacts: ["Outcome Log", "Priority Queue"]
   },
   {
@@ -69,12 +74,12 @@ const BASE_BLOCKS = [
     artifacts: ["Decision Log", "Commitment Log"]
   },
 
-  /** Meeting Block 1: People/Team/Hiring/Quick Decisions */
+  // Morning meetings: People + Leadership
   {
     id: "meetings1",
-    title: "People and Leadership Meetings",
+    title: "Meeting Block 1 : People & Leadership",
     time: "11:30–13:00",
-    intent: "Lead with purpose",
+    intent: "People",
     icon: Calendar,
     meetingTypes: ["1:1s / Coaching", "Team Rituals", "Hiring / Talent", "Decision (quick)"],
     meetingPlaybooks: {
@@ -82,62 +87,62 @@ const BASE_BLOCKS = [
         ai: [
           "Recap last commitments + progress",
           "Surface themes: motivation, blockers, growth opportunities",
-          "Suggest 3 coaching questions + feedback framing"
+          "Suggest 3 coaching questions"
         ],
         human: [
           "Listen first (signal > solutions)",
           "Remove one blocker OR agree a next step",
           "Agree 1 growth action + 1 commitment"
         ],
-        outputs: ["Commitments updated", "One growth action", "Sentiment / risk signal captured"]
+        outputs: ["Commitments updated", "One growth action", "Risk/sentiment signal captured"]
       },
       "Team Rituals": {
         ai: [
           "Prepare a crisp agenda (wins, risks, priorities)",
-          "Summarize key updates (only deltas)",
-          "Draft recognition call-outs (if any)"
+          "Summarize only deltas (what changed)",
+          "Draft recognition call-outs"
         ],
         human: [
           "Reinforce outcomes for the week",
-          "Spot conflicts early and resolve",
-          "Close with owners + deadlines"
+          "Resolve friction early",
+          "Close with owners + dates"
         ],
-        outputs: ["Team aligned", "Risks made explicit", "Clear actions + owners"]
+        outputs: ["Team aligned", "Risks explicit", "Actions owned"]
       },
       "Hiring / Talent": {
         ai: [
-          "Summarize interview feedback and signals",
-          "Highlight risk areas / missing evidence",
-          "Draft role-fit summary vs rubric"
+          "Summarize interview signals vs rubric",
+          "Highlight missing evidence / risk areas",
+          "Draft role-fit summary"
         ],
         human: [
           "Make hire/no-hire decisions quickly",
           "Assign next steps (offer, follow-ups, pipeline)",
-          "Calibrate bar and role expectations"
+          "Calibrate bar"
         ],
         outputs: ["Hire decision + rationale", "Next steps owned", "Bar clarity improved"]
       },
       "Decision (quick)": {
         ai: [
-          "One-page decision brief: options + tradeoffs",
-          "Identify what must be true / risks",
-          "Draft a crisp stakeholder message"
+          "One-page decision brief (options + tradeoffs)",
+          "Identify what must be true / key risks",
+          "Draft stakeholder message"
         ],
         human: [
           "Decide or delegate with owner + time",
-          "Time-box discussion to avoid drift",
-          "Log decision and communicate"
+          "Time-box discussion",
+          "Log and communicate"
         ],
         outputs: ["Decision logged", "Owner + due date", "Stakeholders updated"]
       }
     },
-    artifacts: ["1:1 Notes", "Talent Decisions", "Team Actions"]
+    artifacts: ["1:1 Notes", "Team Actions", "Talent Decisions"]
   },
 
-  /** Meeting Block 2: Execution meetings with Planning/Review/Escalation */
+  // Afternoon meetings: Execution
   {
     id: "meetings2",
-    title: "Execution Meetings",
+    title: "Meeting Block 2 : Execution",
     time: "14:00–16:00",
     intent: "Execute",
     icon: Layers,
@@ -173,67 +178,72 @@ const BASE_BLOCKS = [
         ai: [
           "One-page context: problem, evidence, impact",
           "Options + tradeoffs + recommended path",
-          "Stakeholder map + draft escalation message"
+          "Draft escalation message"
         ],
         human: [
           "Decide or route to decision owner",
           "Set deadline + follow-up mechanism",
           "Communicate the ask crisply"
         ],
-        outputs: ["Decision + owner", "Committed actions", "Escalation resolved or time-boxed"]
+        outputs: ["Decision + owner", "Committed actions", "Escalation contained"]
       }
     },
-    artifacts: ["Program Plan", "Risk Register", "Dependency Notes"]
+    artifacts: ["Program Notes", "Risk Register", "Dependency Notes"]
   },
 
-  {
-    id: "strategic",
-    title: "Strategic Work (Important, Not Urgent)",
-    time: "16:00–17:00",
-    intent: "Strategic",
-    icon: Target,
-    ai: [
-      "Recap context to reduce re-loading",
-      "Act as thought partner (synthesize, challenge, structure)",
-      "Generate first drafts (strategy note, framework, narrative)"
-    ],
-    human: [
-      "Focus on one strategic theme",
-      "Produce one tangible artifact (note, framing, plan)",
-      "Optional: one high-leverage people action"
-    ],
-    outputs: ["One strategic artifact", "Clarity increment", "Future work protected"],
-    artifacts: ["Strategy Notes", "Key Narrative"]
-  },
+  // 16:00 is now Parking / Checkpoint
   {
     id: "parking",
-    title: "Checkpoint / Parking",
-    time: "17:00–18:00",
+    title: "Checkpoint / Parking Lot",
+    time: "16:00–17:00",
     intent: "Stabilize",
     icon: ShieldCheck,
     ai: [
       "Surface unplanned work that landed today",
-      "Suggest what to park vs handle now",
+      "Suggest what to handle vs park",
       "Draft follow-ups to close loops"
     ],
     human: [
       "Handle truly urgent unplanned items",
       "Park the rest explicitly (owner + when)",
-      "Convert open loops into commitments"
+      "Protect tomorrow’s plan"
     ],
     outputs: ["Unplanned work contained", "Open loops closed or parked", "Tomorrow protected"],
     artifacts: ["Parking Lot", "Updated Commitment Log"]
   },
+
+  // Optional night blocks
+  {
+    id: "global",
+    title: "Meeting Block 3 :Optional:Global / Cross-functional",
+    time: "21:00–22:00",
+    intent: "Collaborate",
+    icon: Globe,
+    optional: true,
+    ai: [
+      "Prepare a crisp brief (context, ask, constraints)",
+      "Draft decision options + tradeoffs",
+      "Pre-write follow-ups for owners"
+    ],
+    human: [
+      "Drive to decisions + clear asks",
+      "Align across time zones",
+      "Close with owners + deadlines"
+    ],
+    outputs: ["Global alignment", "Decisions / next steps"],
+    artifacts: ["Global Decisions", "Action Register"]
+  },
   {
     id: "close",
     title: "Night Closure",
-    time: "30 min (night)",
+    time: "22:00–22:15",
     intent: "Close",
     icon: Moon,
+    optional: true,
     ai: [
       "Draft tomorrow’s top outcomes",
-      "Prepare briefs for tomorrow’s meetings",
-      "Summarize decisions pending and open loops"
+      "Prepare briefs for tomorrow’s key meetings",
+      "Summarize open loops"
     ],
     human: ["Capture 1–2 learnings", "Confirm tomorrow’s first action", "Shutdown mentally"],
     outputs: ["Tomorrow draft plan", "Learning captured", "Calm closure"],
@@ -241,7 +251,7 @@ const BASE_BLOCKS = [
   }
 ];
 
-/** ---------- Time helpers (IST) ---------- */
+/** ---------- Time helpers (local TZ) ---------- */
 function getWeekdayId(date, timeZone) {
   const short = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone }).format(date);
   const map = { Mon: "mon", Tue: "tue", Wed: "wed", Thu: "thu", Fri: "fri", Sat: "mon", Sun: "mon" };
@@ -270,65 +280,66 @@ function parseRangeToMinutes(rangeText) {
 }
 
 function pickCurrentOrNextBlock(blocks, nowMin) {
-  const timed = blocks
+  const timedAll = blocks
     .map((b) => ({ b, r: parseRangeToMinutes(b.time) }))
-    .filter((x) => x.r);
+    .filter((x) => x.r)
+    .sort((a, b) => a.r.start - b.r.start);
 
-  const current = timed.find((x) => nowMin >= x.r.start && nowMin < x.r.end);
+  // 1) If NOW falls into ANY block (including optional night blocks), highlight it.
+  const current = timedAll.find((x) => nowMin >= x.r.start && nowMin < x.r.end);
   if (current) return { mode: "now", id: current.b.id };
 
-  const next = timed.find((x) => nowMin < x.r.start);
+  // 2) For NEXT: include optional blocks only after core hours (so they don't show as NEXT during the day).
+  const eligibleForNext = timedAll.filter((x) => !x.b.optional || nowMin >= CORE_END_MIN);
+
+  const next = eligibleForNext.find((x) => nowMin < x.r.start);
   if (next) return { mode: "next", id: next.b.id };
 
-  const night = blocks.find((b) => b.id === "close");
-  return { mode: "after", id: night?.id || timed[timed.length - 1]?.b.id };
+  // 3) After last eligible block
+  const lastEligible = eligibleForNext[eligibleForNext.length - 1]?.b || blocks[blocks.length - 1];
+  return { mode: "after", id: lastEligible?.id };
 }
 
-/** ---------- Thursday overrides ---------- */
+/** ---------- Thursday overrides (2.5h deepwork) ---------- */
 function applyThursdayOverrides(blocks) {
-  // Remove Meeting Block 1 on Thursday
-  const base = blocks.filter((b) => b.id !== "meetings1");
+  const nonPeople = blocks.filter((b) => b.id !== "meetings1");
 
-  return base
-    .map((b) => {
-      if (b.id === "orient") return { ...b, time: "10:00–10:30" };
-      if (b.id === "resolve") return { ...b, time: "10:30–11:00" };
-      if (b.id === "strategic") {
-        return {
-          ...b,
-          id: "urgent_late",
-          title: "Urgent Work (Carry-over)",
-          time: "16:00–17:00",
-          intent: "Resolve",
-          icon: AlertTriangle,
-          ai: ["Summarize what landed unplanned today", "Suggest fast triage: handle vs park", "Draft stakeholder updates"],
-          human: ["Handle critical escalations", "Delegate with owners + deadlines", "Close loops created by meetings"],
-          outputs: ["Urgent items contained", "Escalations resolved", "Clear follow-ups"],
-          artifacts: ["Urgent Queue", "Commitment Log"]
-        };
-      }
-      return b;
-    })
-    .reduce((acc, b) => {
-      acc.push(b);
-      if (b.id === "resolve") {
-        acc.push({
-          id: "deepwork",
-          title: "Deep Work – Builder Mode",
-          time: "11:00–13:30",
-          intent: "Build",
-          icon: Target,
-          ai: ["Act as thought partner (structure, synthesis, challenge)", "Generate first drafts (doc, framework, analysis, narrative)"],
-          human: ["Work on one meaningful artifact", "Avoid context switching", "Finish with a shareable output"],
-          outputs: ["One tangible artifact", "Clarity + decision quality improvement"],
-          artifacts: ["Deepwork Artifact", "Notes / Drafts"]
-        });
-      }
-      return acc;
-    }, []);
+  const out = [];
+  for (const b of nonPeople) {
+    if (b.id === "orient") {
+      out.push({ ...b, time: "10:00–10:30" });
+      continue;
+    }
+    if (b.id === "resolve") {
+      out.push({ ...b, time: "10:30–11:00" });
+
+      out.push({
+        id: "deepwork",
+        title: "Deep Work — Builder Mode",
+        time: "11:00–13:30",
+        intent: "Build",
+        icon: Sparkles,
+        ai: [
+          "Act as a thought partner (structure, synthesize, challenge)",
+          "Generate first drafts (doc, strategy note, framework, analysis)",
+          "Create crisp options + tradeoffs when decisions are needed"
+        ],
+        human: [
+          "Work on one meaningful artifact",
+          "Avoid context switching",
+          "Finish with a shareable output"
+        ],
+        outputs: ["One tangible artifact", "Clarity and leverage gained"],
+        artifacts: ["Deepwork Artifact", "Notes / Drafts"]
+      });
+      continue;
+    }
+    out.push(b);
+  }
+
+  return out;
 }
 
-/** ---------- UI components ---------- */
 function Pill({ children, tone = "neutral" }) {
   const tones = {
     neutral: "bg-slate-100 text-slate-700 border-slate-200",
@@ -337,12 +348,7 @@ function Pill({ children, tone = "neutral" }) {
     out: "bg-emerald-50 text-emerald-800 border-emerald-200"
   };
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-        tones[tone] || tones.neutral
-      )}
-    >
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium", tones[tone] || tones.neutral)}>
       {children}
     </span>
   );
@@ -380,12 +386,18 @@ function SectionCard({ title, icon: Icon, tone = "neutral", children }) {
 
 function BlockTile({ block, active, onClick, tag }) {
   const Icon = block.icon;
+  const isOptional = !!block.optional;
+
   return (
     <button
       onClick={onClick}
       className={cn(
         "group w-full text-left rounded-2xl border p-4 shadow-sm transition",
-        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white hover:border-slate-300"
+        active
+          ? "border-slate-900 bg-slate-900 text-white"
+          : isOptional
+            ? "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
+            : "border-slate-200 bg-white hover:border-slate-300"
       )}
       aria-pressed={active}
     >
@@ -397,10 +409,20 @@ function BlockTile({ block, active, onClick, tag }) {
           <div>
             <div className="flex items-center gap-2">
               <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>{block.title}</div>
+              {isOptional ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                    active ? "border-white/20 bg-white/10 text-white" : "border-slate-200 bg-white text-slate-700"
+                  )}
+                >
+                  Optional
+                </span>
+              ) : null}
               {tag ? (
                 <span
                   className={cn(
-                    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide border",
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
                     active
                       ? "border-white/20 bg-white/10 text-white"
                       : tag === "NOW"
@@ -452,7 +474,7 @@ export default function LeaderDayOSInteractive() {
     return () => clearInterval(t);
   }, []);
 
-  // Keep selected day aligned to “today” in IST
+  // Keep selected day aligned to today in local TZ
   useEffect(() => {
     setSelectedDay(getWeekdayId(now, TIMEZONE));
   }, [now]);
@@ -461,6 +483,7 @@ export default function LeaderDayOSInteractive() {
     return selectedDay === "thu" ? applyThursdayOverrides(BASE_BLOCKS) : BASE_BLOCKS;
   }, [selectedDay]);
 
+  // Search filters blocks
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return blocksBaseForDay;
@@ -493,19 +516,19 @@ export default function LeaderDayOSInteractive() {
     return filtered.find((b) => b.id === activeId) || filtered[0] || blocksBaseForDay[0];
   }, [activeId, filtered, blocksBaseForDay]);
 
-  // If filtering removes active block, fall back
+  // If filtering removes the active block, fall back
   useEffect(() => {
     if (!filtered.some((b) => b.id === activeId) && filtered.length) {
       setActiveId(filtered[0].id);
     }
   }, [filtered, activeId]);
 
-  // Reset on day change
+  // When switching day, reset to first block
   useEffect(() => {
     setActiveId(blocksBaseForDay[0].id);
   }, [selectedDay, blocksBaseForDay]);
 
-  // Auto-pick a valid meeting type for the active block
+  // Ensure meetingType is valid for current active block
   useEffect(() => {
     if (!active?.meetingTypes?.length) {
       setMeetingType("");
@@ -517,7 +540,9 @@ export default function LeaderDayOSInteractive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, active?.meetingTypes]);
 
-  // Auto highlight NOW/NEXT (when not searching)
+  const selectedTheme = WEEK.find((x) => x.id === selectedDay);
+
+  // Auto highlight NOW/NEXT (now includes optional night blocks correctly)
   const focus = useMemo(() => {
     const nowMin = minutesInTz(now, TIMEZONE);
     return pickCurrentOrNextBlock(blocksBaseForDay, nowMin);
@@ -528,8 +553,6 @@ export default function LeaderDayOSInteractive() {
     if (focus?.id) setActiveId(focus.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.id, selectedDay, query]);
-
-  const selectedTheme = WEEK.find((x) => x.id === selectedDay);
 
   const isMeeting = !!active?.meetingTypes?.length;
   const pb = isMeeting ? active.meetingPlaybooks?.[meetingType] : null;
@@ -549,13 +572,19 @@ export default function LeaderDayOSInteractive() {
               Weekly → Daily • Leader AI OS
             </div>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              Weekly themes. Daily execution blocks.
+              AI Leader Operating System (ALOS)
             </h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
+              An aspirational operating model to "Lead With AI", Weekly themes, Daily execution blocks.
+            </p>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
               Pick a day to set context. Then click a block to see what{" "}
               <span className="font-medium text-slate-900">AI prepares</span>, what the{" "}
               <span className="font-medium text-slate-900">leader decides</span>, and the{" "}
               <span className="font-medium text-slate-900">outputs</span>.
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              Timezone: <span className="font-medium text-slate-700">{TIMEZONE}</span>
             </p>
           </div>
 
@@ -612,7 +641,7 @@ export default function LeaderDayOSInteractive() {
 
         {/* Daily View */}
         <div className="mt-6 grid gap-6 md:grid-cols-12">
-          {/* Left */}
+          {/* Left: Blocks */}
           <div className="md:col-span-5">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-900">
@@ -648,7 +677,6 @@ export default function LeaderDayOSInteractive() {
                   />
                 );
               })}
-
               {!filtered.length && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
                   No matches. Try a different search.
@@ -657,7 +685,7 @@ export default function LeaderDayOSInteractive() {
             </div>
           </div>
 
-          {/* Right */}
+          {/* Right: Details */}
           <div className="md:col-span-7">
             <AnimatePresence mode="wait">
               <motion.div
@@ -672,13 +700,12 @@ export default function LeaderDayOSInteractive() {
                   <div>
                     <div className="flex items-center gap-2">
                       <div className="text-lg font-semibold text-slate-900">{active.title}</div>
-                      {!query.trim() && active.id === focus.id ? (
+                      {active.optional ? (
                         <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                          {focus.mode === "now" ? "NOW" : focus.mode === "next" ? "NEXT" : ""}
+                          Optional
                         </span>
                       ) : null}
                     </div>
-
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <Pill>
                         <Clock className="h-3.5 w-3.5" /> {active.time}
@@ -688,7 +715,7 @@ export default function LeaderDayOSInteractive() {
                       </Pill>
                     </div>
 
-                    {/* Meeting chips */}
+                    {/* Meeting sub-block chips */}
                     {isMeeting ? (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {active.meetingTypes.map((t) => (
@@ -722,28 +749,30 @@ export default function LeaderDayOSInteractive() {
                   </SectionCard>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Artifacts</div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        Lightweight logs that make leadership work traceable.
+                {(active.artifacts || []).length ? (
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">Artifacts</div>
+                        <div className="mt-1 text-sm text-slate-600">
+                          Lightweight logs that make leadership work traceable.
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(active.artifacts || []).map((a) => (
+                          <Pill key={a}>{a}</Pill>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(active.artifacts || []).map((a) => (
-                        <Pill key={a}>{a}</Pill>
-                      ))}
-                    </div>
                   </div>
-                </div>
+                ) : null}
               </motion.div>
             </AnimatePresence>
           </div>
         </div>
 
         <div className="mt-6 text-center text-xs text-slate-500">
-          Weekly sets context. Daily blocks execute. Deepwork builds the future.
+          Core day ends at 17:00. Night blocks are optional and purpose-bound.
         </div>
       </div>
     </div>
