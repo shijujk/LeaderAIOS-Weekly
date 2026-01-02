@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
-#const TIMEZONE = "Asia/Kolkata";
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 /** WEEKLY MODEL (Horizontal Bar) */
