@@ -21,9 +21,6 @@ const cn = (...classes) => classes.filter(Boolean).join(" ");
 // Auto-detect timezone (global)
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
-// Core hours end (used for NOW/NEXT logic so optional night blocks don't show as NEXT during the day)
-const CORE_END_MIN = 17 * 60;
-
 /** WEEKLY MODEL (Horizontal Bar) */
 const WEEK = [
   { id: "mon", label: "Mon", theme: "Orient & Plan" },
@@ -70,14 +67,18 @@ const BASE_BLOCKS = [
       "Send 1–3 crisp messages (ask, context, deadline)",
       "Log decisions and commitments"
     ],
-    outputs: ["Decisions made or owned", "Blockers cleared / escalations sent", "Owners + deadlines set"],
+    outputs: [
+      "Decisions made or owned",
+      "Blockers cleared / escalations sent",
+      "Owners + deadlines set"
+    ],
     artifacts: ["Decision Log", "Commitment Log"]
   },
 
   // Morning meetings: People + Leadership
   {
     id: "meetings1",
-    title: "Meeting Block 1 : People & Leadership",
+    title: "Meeting Block 1: People & Leadership",
     time: "11:30–13:00",
     intent: "People",
     icon: Calendar,
@@ -142,7 +143,7 @@ const BASE_BLOCKS = [
   // Afternoon meetings: Execution
   {
     id: "meetings2",
-    title: "Meeting Block 2 : Execution",
+    title: "Meeting Block 2: Execution",
     time: "14:00–16:00",
     intent: "Execute",
     icon: Layers,
@@ -215,7 +216,7 @@ const BASE_BLOCKS = [
   // Optional night blocks
   {
     id: "global",
-    title: "Meeting Block 3 :Optional:Global / Cross-functional",
+    title: "Global / Cross-functional",
     time: "21:00–22:00",
     intent: "Collaborate",
     icon: Globe,
@@ -280,36 +281,37 @@ function parseRangeToMinutes(rangeText) {
 }
 
 function pickCurrentOrNextBlock(blocks, nowMin) {
-  const timedAll = blocks
+  // Include optional blocks too (night slots should highlight properly)
+  const timed = blocks
     .map((b) => ({ b, r: parseRangeToMinutes(b.time) }))
-    .filter((x) => x.r)
-    .sort((a, b) => a.r.start - b.r.start);
+    .filter((x) => x.r);
 
-  // 1) If NOW falls into ANY block (including optional night blocks), highlight it.
-  const current = timedAll.find((x) => nowMin >= x.r.start && nowMin < x.r.end);
+  const current = timed.find((x) => nowMin >= x.r.start && nowMin < x.r.end);
   if (current) return { mode: "now", id: current.b.id };
 
-  // 2) For NEXT: include optional blocks only after core hours (so they don't show as NEXT during the day).
-  const eligibleForNext = timedAll.filter((x) => !x.b.optional || nowMin >= CORE_END_MIN);
-
-  const next = eligibleForNext.find((x) => nowMin < x.r.start);
+  const next = timed.find((x) => nowMin < x.r.start);
   if (next) return { mode: "next", id: next.b.id };
 
-  // 3) After last eligible block
-  const lastEligible = eligibleForNext[eligibleForNext.length - 1]?.b || blocks[blocks.length - 1];
-  return { mode: "after", id: lastEligible?.id };
+  return { mode: "after", id: timed[timed.length - 1]?.b.id };
 }
 
 /** ---------- Thursday overrides (2.5h deepwork) ---------- */
 function applyThursdayOverrides(blocks) {
-  const nonPeople = blocks.filter((b) => b.id !== "meetings1");
+  // On Thu:
+  // - shrink triage + urgent to 30 mins each
+  // - add 11:00–13:30 deepwork
+  // - keep execution 14:00–16:00
+  // - keep parking 16:00–17:00
+  // - keep optional night blocks
 
   const out = [];
-  for (const b of nonPeople) {
+  for (const b of blocks) {
     if (b.id === "orient") {
       out.push({ ...b, time: "10:00–10:30" });
       continue;
     }
+
+    // Replace 10:30–11:30 with 10:30–11:00 + deepwork
     if (b.id === "resolve") {
       out.push({ ...b, time: "10:30–11:00" });
 
@@ -332,8 +334,20 @@ function applyThursdayOverrides(blocks) {
         outputs: ["One tangible artifact", "Clarity and leverage gained"],
         artifacts: ["Deepwork Artifact", "Notes / Drafts"]
       });
+
       continue;
     }
+
+    // People block doesn't fit in the deepwork-day core schedule; keep it optional on Thu
+    if (b.id === "meetings1") {
+      out.push({
+        ...b,
+        optional: true,
+        title: "People & Leadership (optional on Thu)"
+      });
+      continue;
+    }
+
     out.push(b);
   }
 
@@ -348,7 +362,12 @@ function Pill({ children, tone = "neutral" }) {
     out: "bg-emerald-50 text-emerald-800 border-emerald-200"
   };
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium", tones[tone] || tones.neutral)}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+        tones[tone] || tones.neutral
+      )}
+    >
       {children}
     </span>
   );
@@ -403,12 +422,21 @@ function BlockTile({ block, active, onClick, tag }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className={cn("grid h-10 w-10 place-items-center rounded-xl", active ? "bg-white/10" : "bg-slate-100")}>
+          <div
+            className={cn(
+              "grid h-10 w-10 place-items-center rounded-xl",
+              active ? "bg-white/10" : "bg-slate-100"
+            )}
+          >
             <Icon className={cn("h-5 w-5", active ? "text-white" : "text-slate-700")} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>{block.title}</div>
+              <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>
+                {block.title}
+              </div>
+
+              {/* Optional badge */}
               {isOptional ? (
                 <span
                   className={cn(
@@ -419,21 +447,22 @@ function BlockTile({ block, active, onClick, tag }) {
                   Optional
                 </span>
               ) : null}
+
+              {/* NOW / NEXT tag */}
               {tag ? (
                 <span
                   className={cn(
                     "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                    active
-                      ? "border-white/20 bg-white/10 text-white"
-                      : tag === "NOW"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        : "border-slate-200 bg-slate-50 text-slate-700"
+                    active ? "border-white/20 bg-white/10 text-white" : tag === "NOW"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-slate-50 text-slate-700"
                   )}
                 >
                   {tag}
                 </span>
               ) : null}
             </div>
+
             <div className={cn("mt-1 flex items-center gap-2 text-xs", active ? "text-white/80" : "text-slate-500")}>
               <Clock className="h-3.5 w-3.5" />
               <span>{block.time}</span>
@@ -542,7 +571,7 @@ export default function LeaderDayOSInteractive() {
 
   const selectedTheme = WEEK.find((x) => x.id === selectedDay);
 
-  // Auto highlight NOW/NEXT (now includes optional night blocks correctly)
+  // Auto highlight NOW/NEXT (include night slots; also only when not searching)
   const focus = useMemo(() => {
     const nowMin = minutesInTz(now, TIMEZONE);
     return pickCurrentOrNextBlock(blocksBaseForDay, nowMin);
@@ -561,30 +590,29 @@ export default function LeaderDayOSInteractive() {
   const humanItems = pb?.human || active.human || [];
   const outItems = pb?.outputs || active.outputs || [];
 
+  // --- Layout: keep everything in one frame ---
+  // Adjust these if you want even tighter fit.
+  const PANEL_MAX_H = "max-h-[calc(100vh-260px)]";
+
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-5">
         {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Weekly → Daily • Leader AI OS
+              ALOS • Weekly → Daily
+              <span className="text-slate-400">•</span>
+              <span className="text-slate-600">{TIMEZONE}</span>
             </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
               AI Leader Operating System (ALOS)
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
-              An aspirational operating model to "Lead With AI", Weekly themes, Daily execution blocks.
-            </p>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
-              Pick a day to set context. Then click a block to see what{" "}
-              <span className="font-medium text-slate-900">AI prepares</span>, what the{" "}
-              <span className="font-medium text-slate-900">leader decides</span>, and the{" "}
-              <span className="font-medium text-slate-900">outputs</span>.
-            </p>
-            <p className="mt-2 text-xs text-slate-500">
-              Timezone: <span className="font-medium text-slate-700">{TIMEZONE}</span>
+
+            <p className="mt-1 max-w-2xl text-sm text-slate-600 leading-relaxed">
+              A reference model for AI-enabled leadership—pick a day, then run the blocks.
             </p>
           </div>
 
@@ -614,7 +642,7 @@ export default function LeaderDayOSInteractive() {
         </div>
 
         {/* Weekly Horizontal Bar */}
-        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
             {WEEK.map((d) => (
               <button
@@ -640,24 +668,30 @@ export default function LeaderDayOSInteractive() {
         </div>
 
         {/* Daily View */}
-        <div className="mt-6 grid gap-6 md:grid-cols-12">
+        <div className="mt-4 grid gap-4 md:grid-cols-12">
           {/* Left: Blocks */}
           <div className="md:col-span-5">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-900">
                 Daily Blocks
                 {selectedTheme?.theme ? (
                   <span className="ml-2 text-xs font-medium text-slate-500">• {selectedTheme.theme}</span>
                 ) : null}
               </div>
+
               {!query.trim() ? (
                 <div className="text-xs text-slate-500">
-                  {focus.mode === "now" ? "Now" : focus.mode === "next" ? "Next" : "After hours"}
+                  {focus.mode === "now"
+                    ? "Now"
+                    : focus.mode === "next"
+                      ? "Next"
+                      : "After hours"}
                 </div>
               ) : null}
             </div>
 
-            <div className="space-y-3">
+            {/* Scroll inside list so page stays one frame */}
+            <div className={cn("space-y-3 overflow-auto pr-1", PANEL_MAX_H)}>
               {filtered.map((b) => {
                 const tag =
                   !query.trim() && b.id === focus.id
@@ -677,6 +711,7 @@ export default function LeaderDayOSInteractive() {
                   />
                 );
               })}
+
               {!filtered.length && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
                   No matches. Try a different search.
@@ -694,7 +729,10 @@ export default function LeaderDayOSInteractive() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                className={cn(
+                  "rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-auto",
+                  PANEL_MAX_H
+                )}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -771,7 +809,7 @@ export default function LeaderDayOSInteractive() {
           </div>
         </div>
 
-        <div className="mt-6 text-center text-xs text-slate-500">
+        <div className="mt-4 text-center text-xs text-slate-500">
           Core day ends at 17:00. Night blocks are optional and purpose-bound.
         </div>
       </div>
