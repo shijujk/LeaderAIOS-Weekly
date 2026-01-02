@@ -21,6 +21,9 @@ const cn = (...classes) => classes.filter(Boolean).join(" ");
 // Auto-detect timezone (global)
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
+// Core hours end (used for NOW/NEXT logic so optional night blocks don't show as NEXT during the day)
+const CORE_END_MIN = 17 * 60;
+
 /** WEEKLY MODEL (Horizontal Bar) */
 const WEEK = [
   { id: "mon", label: "Mon", theme: "Orient & Plan" },
@@ -277,30 +280,28 @@ function parseRangeToMinutes(rangeText) {
 }
 
 function pickCurrentOrNextBlock(blocks, nowMin) {
-  // Exclude optional blocks from NOW/NEXT highlighting by default
-  const mainBlocks = blocks.filter((b) => !b.optional);
-
-  const timed = mainBlocks
+  const timedAll = blocks
     .map((b) => ({ b, r: parseRangeToMinutes(b.time) }))
-    .filter((x) => x.r);
+    .filter((x) => x.r)
+    .sort((a, b) => a.r.start - b.r.start);
 
-  const current = timed.find((x) => nowMin >= x.r.start && nowMin < x.r.end);
+  // 1) If NOW falls into ANY block (including optional night blocks), highlight it.
+  const current = timedAll.find((x) => nowMin >= x.r.start && nowMin < x.r.end);
   if (current) return { mode: "now", id: current.b.id };
 
-  const next = timed.find((x) => nowMin < x.r.start);
+  // 2) For NEXT: include optional blocks only after core hours (so they don't show as NEXT during the day).
+  const eligibleForNext = timedAll.filter((x) => !x.b.optional || nowMin >= CORE_END_MIN);
+
+  const next = eligibleForNext.find((x) => nowMin < x.r.start);
   if (next) return { mode: "next", id: next.b.id };
 
-  return { mode: "after", id: mainBlocks[mainBlocks.length - 1]?.id || timed[timed.length - 1]?.b.id };
+  // 3) After last eligible block
+  const lastEligible = eligibleForNext[eligibleForNext.length - 1]?.b || blocks[blocks.length - 1];
+  return { mode: "after", id: lastEligible?.id };
 }
 
 /** ---------- Thursday overrides (2.5h deepwork) ---------- */
 function applyThursdayOverrides(blocks) {
-  // On Thu:
-  // - shrink triage + urgent to 30 mins each
-  // - add 11:00–13:30 deepwork
-  // - keep execution 14:00–16:00
-  // - keep parking 16:00–17:00
-  // - keep optional night blocks
   const nonPeople = blocks.filter((b) => b.id !== "meetings1");
 
   const out = [];
@@ -402,25 +403,33 @@ function BlockTile({ block, active, onClick, tag }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className={cn("grid h-10 w-10 place-items-center rounded-xl", active ? "bg-white/10" : isOptional ? "bg-slate-100" : "bg-slate-100")}>
+          <div className={cn("grid h-10 w-10 place-items-center rounded-xl", active ? "bg-white/10" : "bg-slate-100")}>
             <Icon className={cn("h-5 w-5", active ? "text-white" : "text-slate-700")} />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>{block.title}</div>
               {isOptional ? (
-                <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                  active ? "border-white/20 bg-white/10 text-white" : "border-slate-200 bg-white text-slate-700"
-                )}>
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                    active ? "border-white/20 bg-white/10 text-white" : "border-slate-200 bg-white text-slate-700"
+                  )}
+                >
                   Optional
                 </span>
               ) : null}
               {tag ? (
-                <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                  active ? "border-white/20 bg-white/10 text-white" : tag === "NOW"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 bg-slate-50 text-slate-700"
-                )}>
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                    active
+                      ? "border-white/20 bg-white/10 text-white"
+                      : tag === "NOW"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 bg-slate-50 text-slate-700"
+                  )}
+                >
                   {tag}
                 </span>
               ) : null}
@@ -533,7 +542,7 @@ export default function LeaderDayOSInteractive() {
 
   const selectedTheme = WEEK.find((x) => x.id === selectedDay);
 
-  // Auto highlight NOW/NEXT (exclude optional; also only when not searching)
+  // Auto highlight NOW/NEXT (now includes optional night blocks correctly)
   const focus = useMemo(() => {
     const nowMin = minutesInTz(now, TIMEZONE);
     return pickCurrentOrNextBlock(blocksBaseForDay, nowMin);
@@ -643,7 +652,7 @@ export default function LeaderDayOSInteractive() {
               </div>
               {!query.trim() ? (
                 <div className="text-xs text-slate-500">
-                  {focus.mode === "now" ? "Now" : focus.mode === "next" ? "Next" : "After core hours"}
+                  {focus.mode === "now" ? "Now" : focus.mode === "next" ? "Next" : "After hours"}
                 </div>
               ) : null}
             </div>
@@ -651,7 +660,7 @@ export default function LeaderDayOSInteractive() {
             <div className="space-y-3">
               {filtered.map((b) => {
                 const tag =
-                  !query.trim() && !b.optional && b.id === focus.id
+                  !query.trim() && b.id === focus.id
                     ? focus.mode === "now"
                       ? "NOW"
                       : focus.mode === "next"
