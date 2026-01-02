@@ -18,6 +18,8 @@ import {
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
+const TIMEZONE = "Asia/Kolkata";
+
 /** WEEKLY MODEL (Horizontal Bar) */
 const WEEK = [
   { id: "mon", label: "Mon", theme: "Orient & Plan" },
@@ -156,6 +158,51 @@ const BLOCKS = [
   }
 ];
 
+/** ---------- Time helpers (IST) ---------- */
+function getWeekdayId(date, timeZone) {
+  const short = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone }).format(date);
+  const map = { Mon: "mon", Tue: "tue", Wed: "wed", Thu: "thu", Fri: "fri", Sat: "mon", Sun: "mon" };
+  return map[short] || "mon";
+}
+
+function minutesInTz(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone
+  }).formatToParts(date);
+
+  const hh = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  const mm = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  return hh * 60 + mm;
+}
+
+function parseRangeToMinutes(rangeText) {
+  // expects "HH:MM–HH:MM" with an en dash
+  const m = rangeText.match(/(\d{1,2}):(\d{2})\s*–\s*(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const start = Number(m[1]) * 60 + Number(m[2]);
+  const end = Number(m[3]) * 60 + Number(m[4]);
+  return { start, end };
+}
+
+function pickCurrentOrNextBlock(blocks, nowMin) {
+  const timed = blocks
+    .map((b) => ({ b, r: parseRangeToMinutes(b.time) }))
+    .filter((x) => x.r);
+
+  const current = timed.find((x) => nowMin >= x.r.start && nowMin < x.r.end);
+  if (current) return { mode: "now", id: current.b.id };
+
+  const next = timed.find((x) => nowMin < x.r.start);
+  if (next) return { mode: "next", id: next.b.id };
+
+  const night = blocks.find((b) => b.id === "close");
+  return { mode: "after", id: night?.id || timed[timed.length - 1]?.b.id };
+}
+
+/** ---------- UI ---------- */
 function Pill({ children, tone = "neutral" }) {
   const tones = {
     neutral: "bg-slate-100 text-slate-700 border-slate-200",
@@ -205,7 +252,7 @@ function SectionCard({ title, icon: Icon, tone = "neutral", children }) {
   );
 }
 
-function BlockTile({ block, active, onClick }) {
+function BlockTile({ block, active, onClick, tag }) {
   const Icon = block.icon;
   return (
     <button
@@ -222,7 +269,23 @@ function BlockTile({ block, active, onClick }) {
             <Icon className={cn("h-5 w-5", active ? "text-white" : "text-slate-700")} />
           </div>
           <div>
-            <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>{block.title}</div>
+            <div className="flex items-center gap-2">
+              <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>{block.title}</div>
+              {tag ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide border",
+                    active
+                      ? "border-white/20 bg-white/10 text-white"
+                      : tag === "NOW"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 bg-slate-50 text-slate-700"
+                  )}
+                >
+                  {tag}
+                </span>
+              ) : null}
+            </div>
             <div className={cn("mt-1 flex items-center gap-2 text-xs", active ? "text-white/80" : "text-slate-500")}>
               <Clock className="h-3.5 w-3.5" />
               <span>{block.time}</span>
@@ -251,16 +314,27 @@ function List({ items }) {
 }
 
 export default function LeaderDayOSInteractive() {
-  const [selectedDay, setSelectedDay] = useState("thu"); // default highlight
+  // Auto-select today (IST)
+  const [selectedDay, setSelectedDay] = useState(() => getWeekdayId(new Date(), TIMEZONE));
   const [activeId, setActiveId] = useState(BLOCKS[0].id);
   const [query, setQuery] = useState("");
+
+  // Tick once per minute (for NOW/NEXT highlighting)
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Keep selected day aligned to “today” in IST
+  useEffect(() => {
+    setSelectedDay(getWeekdayId(now, TIMEZONE));
+  }, [now]);
 
   // Optional: Thursday “Builder Mode” label tweak (no schedule changes)
   const blocksBaseForDay = useMemo(() => {
     if (selectedDay !== "thu") return BLOCKS;
-    return BLOCKS.map((b) =>
-      b.id === "future" ? { ...b, title: "Deepwork — Builder Mode" } : b
-    );
+    return BLOCKS.map((b) => (b.id === "future" ? { ...b, title: "Deepwork — Builder Mode" } : b));
   }, [selectedDay]);
 
   // Search filters the *current* day’s blocks
@@ -295,10 +369,17 @@ export default function LeaderDayOSInteractive() {
     }
   }, [filtered, activeId]);
 
-  // When switching day, reset to first block (clean UX)
+  // Auto-highlight current or next block (based on IST time) — but only when NOT searching
+  const focus = useMemo(() => {
+    const nowMin = minutesInTz(now, TIMEZONE);
+    return pickCurrentOrNextBlock(blocksBaseForDay, nowMin);
+  }, [now, blocksBaseForDay]);
+
   useEffect(() => {
-    setActiveId(blocksBaseForDay[0].id);
-  }, [selectedDay, blocksBaseForDay]);
+    if (query.trim()) return; // don't fight the user while searching
+    if (focus?.id) setActiveId(focus.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.id, selectedDay, query]);
 
   const selectedTheme = WEEK.find((x) => x.id === selectedDay);
 
@@ -316,8 +397,10 @@ export default function LeaderDayOSInteractive() {
               Weekly themes. Daily execution blocks.
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
-              Pick a day to set context. Then click a block to see what <span className="font-medium text-slate-900">AI prepares</span>,
-              what the <span className="font-medium text-slate-900">leader decides</span>, and the <span className="font-medium text-slate-900">outputs</span>.
+              Pick a day to set context. Then click a block to see what{" "}
+              <span className="font-medium text-slate-900">AI prepares</span>, what the{" "}
+              <span className="font-medium text-slate-900">leader decides</span>, and the{" "}
+              <span className="font-medium text-slate-900">outputs</span>.
             </p>
           </div>
 
@@ -362,7 +445,6 @@ export default function LeaderDayOSInteractive() {
               >
                 <div className="text-xs opacity-80">{d.label}</div>
                 <div className="text-sm font-semibold">{d.theme}</div>
-                {d.slot && <div className="mt-1 text-xs opacity-80">{d.slot}</div>}
               </button>
             ))}
 
@@ -386,17 +468,34 @@ export default function LeaderDayOSInteractive() {
                   </span>
                 ) : null}
               </div>
+              {!query.trim() ? (
+                <div className="text-xs text-slate-500">
+                  {focus.mode === "now" ? "Now" : focus.mode === "next" ? "Next" : "After hours"}
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-3">
-              {filtered.map((b) => (
-                <BlockTile
-                  key={b.id}
-                  block={b}
-                  active={b.id === activeId}
-                  onClick={() => setActiveId(b.id)}
-                />
-              ))}
+              {filtered.map((b) => {
+                const tag =
+                  !query.trim() && b.id === focus.id
+                    ? focus.mode === "now"
+                      ? "NOW"
+                      : focus.mode === "next"
+                        ? "NEXT"
+                        : ""
+                    : "";
+                return (
+                  <BlockTile
+                    key={b.id}
+                    block={b}
+                    active={b.id === activeId}
+                    tag={tag}
+                    onClick={() => setActiveId(b.id)}
+                  />
+                );
+              })}
+
               {!filtered.length && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
                   No matches. Try a different search.
@@ -418,7 +517,14 @@ export default function LeaderDayOSInteractive() {
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="text-lg font-semibold text-slate-900">{active.title}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-lg font-semibold text-slate-900">{active.title}</div>
+                      {!query.trim() && active.id === focus.id ? (
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                          {focus.mode === "now" ? "NOW" : focus.mode === "next" ? "NEXT" : ""}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <Pill>
                         <Clock className="h-3.5 w-3.5" /> {active.time}
