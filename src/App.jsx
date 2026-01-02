@@ -21,9 +21,9 @@ const cn = (...classes) => classes.filter(Boolean).join(" ");
 /** WEEKLY MODEL (Horizontal Bar) */
 const WEEK = [
   { id: "mon", label: "Mon", theme: "Orient & Plan" },
-  { id: "tue", label: "Tue", theme: "Execute & Decide" },
-  { id: "wed", label: "Wed", theme: "Review & Align" },
-  { id: "thu", label: "Thu", theme: "Deepwork: Be a Builder", slot: "Thu AM • 2h Deepwork" },
+  { id: "tue", label: "Tue", theme: "Decide & Execute" },
+  { id: "wed", label: "Wed", theme: "Decide & Execute" },
+  { id: "thu", label: "Thu", theme: "Deepwork: Be a Builder" },
   { id: "fri", label: "Fri", theme: "Inspect & Learn" }
 ];
 
