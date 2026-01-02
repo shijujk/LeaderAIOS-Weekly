@@ -340,11 +340,6 @@ function applyThursdayOverrides(blocks) {
 
     // People block doesn't fit in the deepwork-day core schedule; keep it optional on Thu
     if (b.id === "meetings1") {
-      out.push({
-        ...b,
-        optional: true,
-        title: "People & Leadership (optional on Thu)"
-      });
       continue;
     }
 
