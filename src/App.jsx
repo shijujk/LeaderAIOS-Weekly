@@ -74,7 +74,7 @@ const BASE_BLOCKS = [
   // Morning meetings: People + Leadership
   {
     id: "meetings1",
-    title: "People & Leadership Meetings",
+    title: "Meeting Block 1 : People & Leadership",
     time: "11:30–13:00",
     intent: "People",
     icon: Calendar,
@@ -139,7 +139,7 @@ const BASE_BLOCKS = [
   // Afternoon meetings: Execution
   {
     id: "meetings2",
-    title: "Execution Meetings",
+    title: "Meeting Block 2 : Execution",
     time: "14:00–16:00",
     intent: "Execute",
     icon: Layers,
@@ -212,7 +212,7 @@ const BASE_BLOCKS = [
   // Optional night blocks
   {
     id: "global",
-    title: "Optional: Global / Cross-functional Meetings",
+    title: "Meeting Block 3 :Optional:Global / Cross-functional",
     time: "21:00–22:00",
     intent: "Collaborate",
     icon: Globe,
