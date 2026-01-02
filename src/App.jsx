@@ -566,7 +566,7 @@ export default function LeaderDayOSInteractive() {
               AI Leader Operating System (ALOS)
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
-              An aspirational operating model for AI-enabled leadership, Weekly themes. Daily execution blocks.
+              An aspirational operating model to "Lead With AI", Weekly themes, Daily execution blocks.
             </p>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
               Pick a day to set context. Then click a block to see what{" "}
