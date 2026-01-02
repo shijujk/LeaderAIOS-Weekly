@@ -563,8 +563,14 @@ export default function LeaderDayOSInteractive() {
               Weekly → Daily • Leader AI OS
             </div>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              Weekly themes. Daily execution blocks.
+              AI Leader Operating System (ALOS)
             </h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
+              An aspirational operating model for AI-enabled leadership
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Weekly themes. Daily execution blocks.
+            </p>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 leading-relaxed">
               Pick a day to set context. Then click a block to see what{" "}
               <span className="font-medium text-slate-900">AI prepares</span>, what the{" "}
