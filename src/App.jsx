@@ -612,7 +612,7 @@ export default function LeaderDayOSInteractive() {
             </h1>
 
             <p className="mt-1 max-w-2xl text-sm text-slate-600 leading-relaxed">
-              A reference model for AI-enabled leadership—pick a day, then run the blocks.
+              Lead With AI : A reference model for AI-enabled leadership—pick a day, then run the blocks.
             </p>
           </div>
 
