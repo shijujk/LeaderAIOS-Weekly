@@ -597,13 +597,13 @@ export default function LeaderDayOSInteractive() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              ALOS • Weekly → Daily
+              TALOM • Weekly → Daily
               <span className="text-slate-400">•</span>
               <span className="text-slate-600">{TIMEZONE}</span>
             </div>
 
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              AI Leader Operating System (ALOS)
+              The AI Leader Operating Model (TALOM)
             </h1>
 
             <p className="mt-1 max-w-2xl text-sm text-slate-600 leading-relaxed">
