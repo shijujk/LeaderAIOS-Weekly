@@ -145,7 +145,7 @@ const BASE_BLOCKS = [
     id: "meetings2",
     title: "Meeting Block 2: Execution",
     time: "14:00–16:00",
-    intent: "Execute",
+    intent: "Projects and customers",
     icon: Layers,
     meetingTypes: ["Planning", "Review", "Escalation"],
     meetingPlaybooks: {
