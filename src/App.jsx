@@ -305,7 +305,6 @@ function parseRangeToMinutes(rangeText) {
 }
 
 function pickCurrentOrNextBlock(blocks, nowMin) {
-  // Include optional blocks too (night slots should highlight properly)
   const timed = blocks
     .map((b) => ({ b, r: parseRangeToMinutes(b.time) }))
     .filter((x) => x.r);
@@ -319,15 +318,19 @@ function pickCurrentOrNextBlock(blocks, nowMin) {
   return { mode: "after", id: timed[timed.length - 1]?.b.id };
 }
 
+/** ---------- NEW: Timezone/day rules for global slots ---------- */
+function shouldShowBlock(block, timeZone, dayId) {
+  // 1) India: Monday morning global slot not useful (rest of world off)
+  if (block.id === "global-am" && timeZone === "Asia/Kolkata" && dayId === "mon") return false;
+
+  // 2) Americas: Friday night global slot not useful
+  if (block.id === "global" && timeZone.startsWith("America/") && dayId === "fri") return false;
+
+  return true;
+}
+
 /** ---------- Thursday overrides (2.5h deepwork) ---------- */
 function applyThursdayOverrides(blocks) {
-  // On Thu:
-  // - shrink triage + urgent to 30 mins each
-  // - add 11:00–13:30 deepwork
-  // - keep execution 14:00–16:00
-  // - keep parking 16:00–17:00
-  // - keep optional night blocks
-
   const out = [];
   for (const b of blocks) {
     if (b.id === "orient") {
@@ -335,7 +338,6 @@ function applyThursdayOverrides(blocks) {
       continue;
     }
 
-    // Replace 10:30–11:30 with 10:30–11:00 + deepwork
     if (b.id === "resolve") {
       out.push({ ...b, time: "10:30–11:00" });
 
@@ -362,10 +364,8 @@ function applyThursdayOverrides(blocks) {
       continue;
     }
 
-    // People block doesn't fit in the deepwork-day core schedule; keep it optional on Thu
-    if (b.id === "meetings1") {
-      continue;
-    }
+    // Remove People/Leadership block on Thu
+    if (b.id === "meetings1") continue;
 
     out.push(b);
   }
@@ -441,12 +441,7 @@ function BlockTile({ block, active, onClick, tag }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              "grid h-10 w-10 place-items-center rounded-xl",
-              active ? "bg-white/10" : "bg-slate-100"
-            )}
-          >
+          <div className={cn("grid h-10 w-10 place-items-center rounded-xl", active ? "bg-white/10" : "bg-slate-100")}>
             <Icon className={cn("h-5 w-5", active ? "text-white" : "text-slate-700")} />
           </div>
           <div>
@@ -455,7 +450,6 @@ function BlockTile({ block, active, onClick, tag }) {
                 {block.title}
               </div>
 
-              {/* Optional badge */}
               {isOptional ? (
                 <span
                   className={cn(
@@ -467,7 +461,6 @@ function BlockTile({ block, active, onClick, tag }) {
                 </span>
               ) : null}
 
-              {/* NOW / NEXT tag */}
               {tag ? (
                 <span
                   className={cn(
@@ -511,7 +504,10 @@ function List({ items }) {
 
 export default function LeaderDayOSInteractive() {
   const [selectedDay, setSelectedDay] = useState(() => getWeekdayId(new Date(), TIMEZONE));
+
+  // NOTE: init with BASE_BLOCKS[0], but we’ll correct to first visible block below.
   const [activeId, setActiveId] = useState(BASE_BLOCKS[0].id);
+
   const [query, setQuery] = useState("");
   const [meetingType, setMeetingType] = useState("");
 
@@ -527,8 +523,10 @@ export default function LeaderDayOSInteractive() {
     setSelectedDay(getWeekdayId(now, TIMEZONE));
   }, [now]);
 
+  // Build blocks for day (Thu override), then apply timezone/day visibility rules
   const blocksBaseForDay = useMemo(() => {
-    return selectedDay === "thu" ? applyThursdayOverrides(BASE_BLOCKS) : BASE_BLOCKS;
+    const raw = selectedDay === "thu" ? applyThursdayOverrides(BASE_BLOCKS) : BASE_BLOCKS;
+    return raw.filter((b) => shouldShowBlock(b, TIMEZONE, selectedDay));
   }, [selectedDay]);
 
   // Search filters blocks
@@ -571,9 +569,9 @@ export default function LeaderDayOSInteractive() {
     }
   }, [filtered, activeId]);
 
-  // When switching day, reset to first block
+  // When switching day (or visibility rules change), reset to first visible block
   useEffect(() => {
-    setActiveId(blocksBaseForDay[0].id);
+    if (blocksBaseForDay.length) setActiveId(blocksBaseForDay[0].id);
   }, [selectedDay, blocksBaseForDay]);
 
   // Ensure meetingType is valid for current active block
@@ -609,8 +607,6 @@ export default function LeaderDayOSInteractive() {
   const humanItems = pb?.human || active.human || [];
   const outItems = pb?.outputs || active.outputs || [];
 
-  // --- Layout: keep everything in one frame ---
-  // Adjust these if you want even tighter fit.
   const PANEL_MAX_H = "max-h-[calc(100vh-260px)]";
 
   return (
@@ -705,7 +701,6 @@ export default function LeaderDayOSInteractive() {
               ) : null}
             </div>
 
-            {/* Scroll inside list so page stays one frame */}
             <div className={cn("space-y-3 overflow-auto pr-1", PANEL_MAX_H)}>
               {filtered.map((b) => {
                 const tag =
@@ -765,7 +760,6 @@ export default function LeaderDayOSInteractive() {
                       </Pill>
                     </div>
 
-                    {/* Meeting sub-block chips */}
                     {isMeeting ? (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {active.meetingTypes.map((t) => (
