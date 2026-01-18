@@ -32,6 +32,29 @@ const WEEK = [
 
 /** BASE (non-Thursday) DAILY MODEL */
 const BASE_BLOCKS = [
+  // NEW: Optional morning global slot (timezone-driven)
+  {
+    id: "global-am",
+    title: "Global / Cross-functional",
+    time: "07:30–08:30",
+    intent: "Align (time-zone driven)",
+    icon: Globe,
+    optional: true,
+    tzDriven: true,
+    ai: [
+      "Compress global context (decisions, risks, dependencies)",
+      "Prepare a crisp brief (context, ask, constraints)",
+      "Draft decision options + tradeoffs and pre-write follow-ups"
+    ],
+    human: [
+      "Drive to decisions + clear asks",
+      "Resolve cross-region dependencies quickly",
+      "Close with owners + deadlines"
+    ],
+    outputs: ["Global alignment", "Decisions / next steps"],
+    artifacts: ["Global Decisions", "Action Register"]
+  },
+
   {
     id: "orient",
     title: "Morning Triage",
@@ -86,7 +109,7 @@ const BASE_BLOCKS = [
     meetingPlaybooks: {
       "1:1s / Coaching": {
         ai: [
-          "Recap last commitments + progress",
+          "Recap past commitments in talent space + progress",
           "Surface themes: motivation, blockers, growth opportunities",
           "Suggest 3 coaching questions"
         ],
@@ -221,6 +244,7 @@ const BASE_BLOCKS = [
     intent: "Collaborate",
     icon: Globe,
     optional: true,
+    tzDriven: true,
     ai: [
       "Prepare a crisp brief (context, ask, constraints)",
       "Draft decision options + tradeoffs",
@@ -439,7 +463,7 @@ function BlockTile({ block, active, onClick, tag }) {
                     active ? "border-white/20 bg-white/10 text-white" : "border-slate-200 bg-white text-slate-700"
                   )}
                 >
-                  Optional
+                  {block.tzDriven ? "Optional • Time-zone driven" : "Optional"}
                 </span>
               ) : null}
 
@@ -676,11 +700,7 @@ export default function LeaderDayOSInteractive() {
 
               {!query.trim() ? (
                 <div className="text-xs text-slate-500">
-                  {focus.mode === "now"
-                    ? "Now"
-                    : focus.mode === "next"
-                      ? "Next"
-                      : "After hours"}
+                  {focus.mode === "now" ? "Now" : focus.mode === "next" ? "Next" : "After hours"}
                 </div>
               ) : null}
             </div>
@@ -724,10 +744,7 @@ export default function LeaderDayOSInteractive() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
-                className={cn(
-                  "rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-auto",
-                  PANEL_MAX_H
-                )}
+                className={cn("rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-auto", PANEL_MAX_H)}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -735,7 +752,7 @@ export default function LeaderDayOSInteractive() {
                       <div className="text-lg font-semibold text-slate-900">{active.title}</div>
                       {active.optional ? (
                         <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                          Optional
+                          {active.tzDriven ? "Optional • Time-zone driven" : "Optional"}
                         </span>
                       ) : null}
                     </div>
