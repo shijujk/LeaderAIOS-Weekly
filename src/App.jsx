@@ -318,19 +318,34 @@ function pickCurrentOrNextBlock(blocks, nowMin) {
   return { mode: "after", id: timed[timed.length - 1]?.b.id };
 }
 
-/** ---------- NEW: Timezone/day rules for global slots ---------- */
-function shouldShowBlock(block, timeZone, dayId) {
-  // 1) India: Monday morning global slot not useful (rest of world off)
-  if (block.id === "global-am" && timeZone === "Asia/Kolkata" && dayId === "mon") return false;
+/** ---------- Time-zone applicability (pragmatic rules) ---------- */
+function isBlockApplicable(block, selectedDay, timeZone) {
+  if (!block?.tzDriven) return true;
 
-  // 2) Americas: Friday night global slot not useful
-  if (block.id === "global" && timeZone.startsWith("America/") && dayId === "fri") return false;
+  // Heuristic rules you requested:
+  // 1) Monday AM global slot doesn't make sense for India/APAC because US/Europe are mostly offline.
+  if (
+    block.id === "global-am" &&
+    selectedDay === "mon" &&
+    (timeZone.startsWith("Asia/") || timeZone.startsWith("Australia/"))
+  ) {
+    return false;
+  }
+
+  // 2) Friday night global slot doesn't make sense for US time zones (APAC/EMEA weekend already starting).
+  if (block.id === "global" && selectedDay === "fri" && timeZone.startsWith("America/")) {
+    return false;
+  }
 
   return true;
 }
 
 /** ---------- Thursday overrides (2.5h deepwork) ---------- */
 function applyThursdayOverrides(blocks) {
+  // On Thu:
+  // - shrink urgent block to 10:30–11:00
+  // - add 11:00–13:30 deepwork
+  // - remove people block (meetings1)
   const out = [];
   for (const b of blocks) {
     if (b.id === "orient") {
@@ -364,12 +379,10 @@ function applyThursdayOverrides(blocks) {
       continue;
     }
 
-    // Remove People/Leadership block on Thu
-    if (b.id === "meetings1") continue;
+    if (b.id === "meetings1") continue; // remove people block on Thu core schedule
 
     out.push(b);
   }
-
   return out;
 }
 
@@ -444,6 +457,7 @@ function BlockTile({ block, active, onClick, tag }) {
           <div className={cn("grid h-10 w-10 place-items-center rounded-xl", active ? "bg-white/10" : "bg-slate-100")}>
             <Icon className={cn("h-5 w-5", active ? "text-white" : "text-slate-700")} />
           </div>
+
           <div>
             <div className="flex items-center gap-2">
               <div className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-900")}>
@@ -465,9 +479,11 @@ function BlockTile({ block, active, onClick, tag }) {
                 <span
                   className={cn(
                     "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                    active ? "border-white/20 bg-white/10 text-white" : tag === "NOW"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-slate-50 text-slate-700"
+                    active
+                      ? "border-white/20 bg-white/10 text-white"
+                      : tag === "NOW"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 bg-slate-50 text-slate-700"
                   )}
                 >
                   {tag}
@@ -483,6 +499,7 @@ function BlockTile({ block, active, onClick, tag }) {
             </div>
           </div>
         </div>
+
         <ChevronRight className={cn("h-5 w-5 transition", active ? "text-white" : "text-slate-300 group-hover:text-slate-400")} />
       </div>
     </button>
@@ -504,10 +521,7 @@ function List({ items }) {
 
 export default function LeaderDayOSInteractive() {
   const [selectedDay, setSelectedDay] = useState(() => getWeekdayId(new Date(), TIMEZONE));
-
-  // NOTE: init with BASE_BLOCKS[0], but we’ll correct to first visible block below.
   const [activeId, setActiveId] = useState(BASE_BLOCKS[0].id);
-
   const [query, setQuery] = useState("");
   const [meetingType, setMeetingType] = useState("");
 
@@ -523,10 +537,10 @@ export default function LeaderDayOSInteractive() {
     setSelectedDay(getWeekdayId(now, TIMEZONE));
   }, [now]);
 
-  // Build blocks for day (Thu override), then apply timezone/day visibility rules
   const blocksBaseForDay = useMemo(() => {
-    const raw = selectedDay === "thu" ? applyThursdayOverrides(BASE_BLOCKS) : BASE_BLOCKS;
-    return raw.filter((b) => shouldShowBlock(b, TIMEZONE, selectedDay));
+    const dayBlocks = selectedDay === "thu" ? applyThursdayOverrides(BASE_BLOCKS) : BASE_BLOCKS;
+    // Apply tz-driven visibility rules
+    return dayBlocks.filter((b) => isBlockApplicable(b, selectedDay, TIMEZONE));
   }, [selectedDay]);
 
   // Search filters blocks
@@ -569,9 +583,9 @@ export default function LeaderDayOSInteractive() {
     }
   }, [filtered, activeId]);
 
-  // When switching day (or visibility rules change), reset to first visible block
+  // When switching day, reset to first block (if exists)
   useEffect(() => {
-    if (blocksBaseForDay.length) setActiveId(blocksBaseForDay[0].id);
+    if (blocksBaseForDay?.length) setActiveId(blocksBaseForDay[0].id);
   }, [selectedDay, blocksBaseForDay]);
 
   // Ensure meetingType is valid for current active block
@@ -603,10 +617,11 @@ export default function LeaderDayOSInteractive() {
   const isMeeting = !!active?.meetingTypes?.length;
   const pb = isMeeting ? active.meetingPlaybooks?.[meetingType] : null;
 
-  const aiItems = pb?.ai || active.ai || [];
-  const humanItems = pb?.human || active.human || [];
-  const outItems = pb?.outputs || active.outputs || [];
+  const aiItems = pb?.ai || active?.ai || [];
+  const humanItems = pb?.human || active?.human || [];
+  const outItems = pb?.outputs || active?.outputs || [];
 
+  // --- Layout: keep everything in one frame ---
   const PANEL_MAX_H = "max-h-[calc(100vh-260px)]";
 
   return (
@@ -701,6 +716,7 @@ export default function LeaderDayOSInteractive() {
               ) : null}
             </div>
 
+            {/* Scroll inside list so page stays one frame */}
             <div className={cn("space-y-3 overflow-auto pr-1", PANEL_MAX_H)}>
               {filtered.map((b) => {
                 const tag =
@@ -734,82 +750,89 @@ export default function LeaderDayOSInteractive() {
           <div className="md:col-span-7">
             <AnimatePresence mode="wait">
               <motion.div
-                key={active.id}
+                key={active?.id || "empty"}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
                 className={cn("rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-auto", PANEL_MAX_H)}
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-lg font-semibold text-slate-900">{active.title}</div>
-                      {active.optional ? (
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                          {active.tzDriven ? "Optional • Time-zone driven" : "Optional"}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                      <Pill>
-                        <Clock className="h-3.5 w-3.5" /> {active.time}
-                      </Pill>
-                      <Pill>
-                        <ClipboardList className="h-3.5 w-3.5" /> {active.intent}
-                      </Pill>
-                    </div>
-
-                    {isMeeting ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {active.meetingTypes.map((t) => (
-                          <button
-                            key={t}
-                            onClick={() => setMeetingType(t)}
-                            className={cn(
-                              "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                              meetingType === t
-                                ? "border-slate-900 bg-slate-900 text-white"
-                                : "border-slate-200 bg-white hover:border-slate-300"
-                            )}
-                          >
-                            {t}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <SectionCard title="AI prepares" icon={Sparkles} tone="ai">
-                    <List items={aiItems} />
-                  </SectionCard>
-                  <SectionCard title="Leader decides" icon={User}>
-                    <List items={humanItems} />
-                  </SectionCard>
-                  <SectionCard title="Outputs" icon={CheckCircle2} tone="out">
-                    <List items={outItems} />
-                  </SectionCard>
-                </div>
-
-                {(active.artifacts || []).length ? (
-                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                {!active ? (
+                  <div className="text-sm text-slate-600">No block selected.</div>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <div className="text-sm font-semibold text-slate-900">Artifacts</div>
-                        <div className="mt-1 text-sm text-slate-600">
-                          Lightweight logs that make leadership work traceable.
+                        <div className="flex items-center gap-2">
+                          <div className="text-lg font-semibold text-slate-900">{active.title}</div>
+                          {active.optional ? (
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                              {active.tzDriven ? "Optional • Time-zone driven" : "Optional"}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                          <Pill>
+                            <Clock className="h-3.5 w-3.5" /> {active.time}
+                          </Pill>
+                          <Pill>
+                            <ClipboardList className="h-3.5 w-3.5" /> {active.intent}
+                          </Pill>
+                        </div>
+
+                        {/* Meeting sub-block chips */}
+                        {isMeeting ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {active.meetingTypes.map((t) => (
+                              <button
+                                key={t}
+                                onClick={() => setMeetingType(t)}
+                                className={cn(
+                                  "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                                  meetingType === t
+                                    ? "border-slate-900 bg-slate-900 text-white"
+                                    : "border-slate-200 bg-white hover:border-slate-300"
+                                )}
+                              >
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid gap-4 md:grid-cols-3">
+                      <SectionCard title="AI prepares" icon={Sparkles} tone="ai">
+                        <List items={aiItems} />
+                      </SectionCard>
+                      <SectionCard title="Leader decides" icon={User}>
+                        <List items={humanItems} />
+                      </SectionCard>
+                      <SectionCard title="Outputs" icon={CheckCircle2} tone="out">
+                        <List items={outItems} />
+                      </SectionCard>
+                    </div>
+
+                    {(active.artifacts || []).length ? (
+                      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">Artifacts</div>
+                            <div className="mt-1 text-sm text-slate-600">
+                              Lightweight logs that make leadership work traceable.
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(active.artifacts || []).map((a) => (
+                              <Pill key={a}>{a}</Pill>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(active.artifacts || []).map((a) => (
-                          <Pill key={a}>{a}</Pill>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
+                    ) : null}
+                  </>
+                )}
               </motion.div>
             </AnimatePresence>
           </div>
