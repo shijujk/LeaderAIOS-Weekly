@@ -62,7 +62,7 @@ const BASE_BLOCKS = [
     intent: "Orient",
     icon: Sparkles,
     ai: [
-      "Aggregate signals from calendar, messages, dashboards, incidents, OKRs",
+      "Aggregate signals from calendar, messages, dashboards, CDETS, JIRA, Confluence etc",
       "Cluster into Urgent & Important / Important-Not-Urgent / Noise",
       "Draft Today’s 3 Outcomes (suggested)"
     ],
